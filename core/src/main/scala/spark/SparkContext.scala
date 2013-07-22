@@ -53,7 +53,6 @@ import org.apache.hadoop.mapred.TextInputFormat
 import org.apache.hadoop.mapreduce.{InputFormat => NewInputFormat}
 import org.apache.hadoop.mapreduce.{Job => NewHadoopJob}
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat => NewFileInputFormat}
-import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.mesos.MesosNativeLibrary
 
@@ -143,6 +142,11 @@ class SparkContext(
   executorEnvs("SPARK_MEM") = SparkContext.executorMemoryRequested + "m"
   if (environment != null) {
     executorEnvs ++= environment
+  }
+
+  // Add token to environment variables to pass to executors for security Hadoop access
+  SparkHadoopUtil.createSerializedToken() map { e =>
+    executorEnvs(SparkHadoopUtil.HDFS_TOKEN_KEY) = e
   }
 
   // Create and start the scheduler

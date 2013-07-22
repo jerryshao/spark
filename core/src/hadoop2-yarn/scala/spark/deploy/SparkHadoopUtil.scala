@@ -48,6 +48,8 @@ object SparkHadoopUtil {
     func(args)
   }
 
+  def createSerializedToken(): Option[String] = None
+
   // Note that all params which start with SPARK are propagated all the way through, so if in yarn mode, this MUST be set to true.
   def isYarnMode(): Boolean = {
     val yarnMode = System.getProperty("SPARK_YARN_MODE", System.getenv("SPARK_YARN_MODE"))

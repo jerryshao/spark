@@ -16,14 +16,24 @@
  */
 
 package spark.deploy
+
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hadoop.security.token.{Token, TokenIdentifier}
+
+import java.io.IOException
+import java.security.PrivilegedExceptionAction
 
 
 /**
  * Contains util methods to interact with Hadoop from spark.
  */
 object SparkHadoopUtil {
+  val HDFS_TOKEN_KEY = "SPARK_HDFS_TOKEN"
+  val conf = newConfiguration()
+  UserGroupInformation.setConfiguration(conf)
 
   def getUserNameFromEnvironment(): String = {
     // defaulting to -D ...
@@ -31,9 +41,38 @@ object SparkHadoopUtil {
   }
 
   def runAsUser(func: (Product) => Unit, args: Product) {
+    runAsUser(func, args, getUserNameFromEnvironment)
+  }
 
-    // Add support, if exists - for now, simply run func !
-    func(args)
+  def runAsUser(func: (Product) => Unit, args: Product, user: String) {
+    val ugi = UserGroupInformation.createRemoteUser(user)
+    if (UserGroupInformation.isSecurityEnabled) {
+      Option(System.getenv(HDFS_TOKEN_KEY)) match {
+        case Some(s) =>
+          ugi.setAuthenticationMethod(UserGroupInformation.AuthenticationMethod.TOKEN)
+          val token = new Token[TokenIdentifier]()
+          token.decodeFromUrlString(s)
+          ugi.addToken(token)
+        case None => throw new IOException("Failed to get token in security environment")
+      }
+    }
+
+    ugi.doAs(new PrivilegedExceptionAction[Unit] {
+      def run: Unit = {
+        func(args)
+      }
+    })
+  }
+
+  def createSerializedToken() :Option[String] = {
+    if (UserGroupInformation.isSecurityEnabled) {
+      val fs = FileSystem.get(conf)
+      val user = UserGroupInformation.getCurrentUser.getShortUserName
+      Option(fs.getDelegationToken(user).asInstanceOf[Token[_ <: TokenIdentifier]])
+        .map(_.encodeToUrlString())
+    } else {
+      None
+    }
   }
 
   // Return an appropriate (subclass) of Configuration. Creating config can initializes some hadoop subsystems
@@ -43,5 +82,4 @@ object SparkHadoopUtil {
   def addCredentials(conf: JobConf) {}
 
   def isYarnMode(): Boolean = { false }
-
 }

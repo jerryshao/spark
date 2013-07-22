@@ -91,6 +91,7 @@ private[spark] class ExecutorRunner(
     case "{{EXECUTOR_ID}}" => execId.toString
     case "{{HOSTNAME}}" => Utils.parseHostPort(hostPort)._1
     case "{{CORES}}" => cores.toString
+    case "{{USER}}" => appDesc.user
     case other => other
   }
 

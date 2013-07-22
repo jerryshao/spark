@@ -33,7 +33,8 @@ private[spark] class StandaloneExecutorBackend(
     driverUrl: String,
     executorId: String,
     hostPort: String,
-    cores: Int)
+    cores: Int,
+    user: String)
   extends Actor
   with ExecutorBackend
   with Logging {
@@ -81,20 +82,21 @@ private[spark] class StandaloneExecutorBackend(
 }
 
 private[spark] object StandaloneExecutorBackend {
-  def run(driverUrl: String, executorId: String, hostname: String, cores: Int) {
-    SparkHadoopUtil.runAsUser(run0, Tuple4[Any, Any, Any, Any] (driverUrl, executorId, hostname, cores))
+  def run(driverUrl: String, executorId: String, hostname: String, cores: Int, user: String) {
+    SparkHadoopUtil.runAsUser(run0, Tuple5[Any, Any, Any, Any, Any] (driverUrl, executorId, hostname, cores, user), user)
   }
 
   // This will be run 'as' the user
   def run0(args: Product) {
-    assert(4 == args.productArity)
+    assert(5 == args.productArity)
     runImpl(args.productElement(0).asInstanceOf[String], 
       args.productElement(1).asInstanceOf[String],
       args.productElement(2).asInstanceOf[String],
-      args.productElement(3).asInstanceOf[Int])
+      args.productElement(3).asInstanceOf[Int],
+      args.productElement(4).asInstanceOf[String])
   }
   
-  private def runImpl(driverUrl: String, executorId: String, hostname: String, cores: Int) {
+  private def runImpl(driverUrl: String, executorId: String, hostname: String, cores: Int, user: String) {
     // Debug code
     Utils.checkHost(hostname)
 
@@ -105,17 +107,17 @@ private[spark] object StandaloneExecutorBackend {
     val sparkHostPort = hostname + ":" + boundPort
     System.setProperty("spark.hostPort", sparkHostPort)
     val actor = actorSystem.actorOf(
-      Props(new StandaloneExecutorBackend(driverUrl, executorId, sparkHostPort, cores)),
+      Props(new StandaloneExecutorBackend(driverUrl, executorId, sparkHostPort, cores, user)),
       name = "Executor")
     actorSystem.awaitTermination()
   }
 
   def main(args: Array[String]) {
-    if (args.length < 4) {
+    if (args.length < 5) {
       //the reason we allow the last frameworkId argument is to make it easy to kill rogue executors
-      System.err.println("Usage: StandaloneExecutorBackend <driverUrl> <executorId> <hostname> <cores> [<appid>]")
+      System.err.println("Usage: StandaloneExecutorBackend <driverUrl> <executorId> <hostname> <cores> <user> [<appid>]")
       System.exit(1)
     }
-    run(args(0), args(1), args(2), args(3).toInt)
+    run(args(0), args(1), args(2), args(3).toInt, args(4))
   }
 }
